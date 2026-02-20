@@ -1,0 +1,136 @@
+======= Scheduling Algorithms =======
+pair<vector<Process>, vector<GanttEntry>> fcfs(vector<Process> processes) {
+    sort(processes.begin(), processes.end(), [](const Process& a, const Process& b) {
+        return a.arrival_time < b.arrival_time;
+    });
+
+    vector<GanttEntry> gantt;
+    int time = 0;
+
+    for (auto& p : processes) {
+        if (time < p.arrival_time) {
+            for (int t = time; t < p.arrival_time; ++t)
+                gantt.push_back({t, -1});
+            time = p.arrival_time;
+        }
+
+        for (int t = 0; t < p.burst_time; ++t)
+            gantt.push_back({time + t, p.pid});
+
+        time += p.burst_time;
+        p.completion_time = time;
+        p.turnaround_time = time - p.arrival_time;
+        p.waiting_time = p.turnaround_time - p.burst_time;
+    }
+
+    return {processes, gantt};
+}
+
+pair<vector<Process>, vector<GanttEntry>> sjf_non_preemptive(vector<Process> processes) {
+    vector<GanttEntry> gantt;
+    int time = 0, completed = 0, n = processes.size();
+    vector<bool> done(n, false);
+
+    while (completed < n) {
+        int idx = -1, min_bt = INT_MAX;
+        for (int i = 0; i < n; ++i) {
+            if (!done[i] && processes[i].arrival_time <= time && processes[i].burst_time < min_bt) {
+                min_bt = processes[i].burst_time;
+                idx = i;
+            }
+        }
+
+        if (idx == -1) {
+            gantt.push_back({time++, -1});
+            continue;
+        }
+
+        for (int t = 0; t < processes[idx].burst_time; ++t)
+            gantt.push_back({time + t, processes[idx].pid});
+
+        time += processes[idx].burst_time;
+        processes[idx].completion_time = time;
+        processes[idx].turnaround_time = time - processes[idx].arrival_time;
+        processes[idx].waiting_time = processes[idx].turnaround_time - processes[idx].burst_time;
+        done[idx] = true;
+        completed++;
+    }
+
+    return {processes, gantt};
+}
+
+pair<vector<Process>, vector<GanttEntry>> sjf_preemptive(vector<Process> processes) {
+    vector<GanttEntry> gantt;
+    int n = processes.size(), completed = 0, time = 0;
+
+    for (auto& p : processes)
+        p.remaining_time = p.burst_time;
+
+    while (completed < n) {
+        int shortest = -1, min_rem = INT_MAX;
+        for (int i = 0; i < n; ++i) {
+            if (processes[i].arrival_time <= time && processes[i].remaining_time < min_rem && processes[i].remaining_time > 0) {
+                min_rem = processes[i].remaining_time;
+                shortest = i;
+            }
+        }
+
+        if (shortest == -1) {
+            gantt.push_back({time++, -1});
+            continue;
+        }
+
+        gantt.push_back({time, processes[shortest].pid});
+        processes[shortest].remaining_time--;
+
+        if (processes[shortest].start_time == -1)
+            processes[shortest].start_time = time;
+
+        time++;
+
+        if (processes[shortest].remaining_time == 0) {
+            completed++;
+            processes[shortest].completion_time = time;
+            processes[shortest].turnaround_time = time - processes[shortest].arrival_time;
+            processes[shortest].waiting_time = processes[shortest].turnaround_time - processes[shortest].burst_time;
+        }
+    }
+
+    return {processes, gantt};
+}
+
+pair<vector<Process>, vector<GanttEntry>> round_robin(vector<Process> processes, int quantum) {
+    vector<GanttEntry> gantt;
+    int time = 0, completed = 0, n = processes.size();
+    vector<int> remaining(n), queue;
+    for (int i = 0; i < n; ++i)
+        remaining[i] = processes[i].burst_time;
+
+    while (completed < n) {
+        bool executed = false;
+        for (int i = 0; i < n; ++i) {
+            if (processes[i].arrival_time <= time && remaining[i] > 0) {
+                executed = true;
+                int exec = min(quantum, remaining[i]);
+                for (int t = 0; t < exec; ++t)
+                    gantt.push_back({time + t, processes[i].pid});
+                time += exec;
+                remaining[i] -= exec;
+
+                if (remaining[i] == 0) {
+                    completed++;
+                    processes[i].completion_time = time;
+                    processes[i].turnaround_time = time - processes[i].arrival_time;
+                    processes[i].waiting_time = processes[i].turnaround_time - processes[i].burst_time;
+                }
+            }
+        }
+
+        if (!executed) {
+            gantt.push_back({time, -1});
+            time++;
+        }
+    }
+
+    return {processes, gantt};
+}
