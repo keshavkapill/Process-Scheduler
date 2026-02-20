@@ -1,0 +1,131 @@
+==========THIS FILE CONTAINS SCRIPT FOR GNUPLOT THAT HELPS IN GENERATING DIFFERENT GRAPHS FOR THE DATA . IT ALSO CONTAINS THE FILE HANDLING PART  OF THE CODE AS THE GRAPHS ARE SAVED IN THE FORM OF FILES IN SYSTEM  AND GANTT CHART GENERATION SEGMENT  ==========
+
+======= Graph Generators =======
+void generate_waiting_time_script(const vector<string>& algorithms) {
+    ofstream script("outputs/waiting_time_plot.plt");
+    script << "set terminal wxt enhanced\n"
+           << "set title 'Waiting Time Comparison for Each Process'\n"
+           << "set style data histogram\n"
+           << "set style histogram clustered gap 1\n"
+           << "set style fill solid border -1\n"
+           << "set boxwidth 0.8\n"
+           << "set xtics rotate\n"
+           << "set yrange [0:*]\n"
+           << "set key outside right top\n"
+           << "plot 'outputs/waiting_time_data.dat' using 2:xtic(1) title columnheader(2), \\\n";
+
+    for (size_t i = 1; i < algorithms.size(); ++i) {
+        script << "     '' using " << i + 2 << " title columnheader(" << i + 2 << ")";
+        if (i != algorithms.size() - 1) script << ", \\\n";
+    }
+    script << "\npause -1\n";
+    script.close();
+}
+
+void generate_scalability_script() {
+    ofstream script("outputs/scalability_plot.plt");
+    script << "set terminal wxt enhanced\n"
+           << "set title 'Scalability: Processes vs Avg Waiting Time'\n"
+           << "set xlabel 'Number of Processes'\n"
+           << "set ylabel 'Avg Waiting Time'\n"
+           << "set xrange [1:10]\n"
+           << "set xtics 1\n"
+           << "set grid\n"
+           << "plot 'outputs/scalability_data.dat' using 1:2 with linespoints title 'FCFS', \\\n"
+           << "     '' using 1:3 with linespoints title 'SJF_NP', \\\n"
+           << "     '' using 1:4 with linespoints title 'SRTF', \\\n"
+           << "     '' using 1:5 with linespoints title 'RR'\n"
+           << "pause -1\n";
+    script.close();
+}
+
+void generate_turnaround_time_script() {
+    ofstream script("outputs/turnaround_time_plot.plt");
+    script << "set terminal wxt enhanced\n"
+           << "set title 'Average Turnaround Time vs Number of Processes'\n"
+           << "set xlabel 'Number of Processes'\n"
+           << "set ylabel 'Average Turnaround Time'\n"
+           << "set xrange [1:10]\n"
+           << "set xtics 1\n"
+           << "set grid\n"
+           << "plot 'outputs/turnaround_time_data.dat' using 1:2 with linespoints title 'Avg Turnaround Time'\n"
+           << "pause -1\n";
+    script.close();
+}
+
+void plot_waiting_time(const vector<vector<Process>>& all_results, const vector<string>& algorithms) {
+    createDirectory("outputs");
+    ofstream file("outputs/waiting_time_data.dat");
+    file << "Process";
+    for (const auto& a : algorithms) file << "\t" << a;
+    file << "\n";
+
+    for (size_t i = 0; i < all_results[0].size(); ++i) {
+        file << "P" << all_results[0][i].pid;
+        for (const auto& result : all_results)
+            file << "\t" << result[i].waiting_time;
+        file << "\n";
+    }
+    file.close();
+    generate_waiting_time_script(algorithms);
+    system("gnuplot outputs/waiting_time_plot.plt");
+}
+
+void plot_scalability(int quantum) {
+    ofstream file("outputs/scalability_data.dat");
+    file << "N FCFS SJF_NP SRTF RR\n";
+    for (int n = 1; n <= 10; ++n) {
+        auto p = generate_processes(n);
+        double a = 0, b = 0, c = 0, d = 0;
+        for (auto x : fcfs(p).first) a += x.waiting_time;
+        for (auto x : sjf_non_preemptive(p).first) b += x.waiting_time;
+        for (auto x : sjf_preemptive(p).first) c += x.waiting_time;
+        for (auto x : round_robin(p, quantum).first) d += x.waiting_time;
+        file << n << " " << a / n << " " << b / n << " " << c / n << " " << d / n << "\n";
+    }
+    file.close();
+    generate_scalability_script();
+    system("gnuplot outputs/scalability_plot.plt");
+}
+
+void plot_avg_turnaround_time() {
+    ofstream file("outputs/turnaround_time_data.dat");
+    for (int n = 1; n <= 10; ++n) {
+        auto p = generate_processes(n);
+        double sum = 0;
+        auto result = fcfs(p).first;
+        for (auto& x : result) sum += x.turnaround_time;
+        file << n << " " << sum / n << "\n";
+    }
+    file.close();
+    generate_turnaround_time_script();
+    system("gnuplot outputs/turnaround_time_plot.plt");
+}
+======= New Functions =======
+void print_gantt_chart(const vector<GanttEntry>& gantt) {
+    if (gantt.empty()) return;
+
+    cout << "\nGantt Chart:\n";
+    cout << "Time\tProcess\n";
+    cout << "----\t-------\n";
+
+    int prev_pid = gantt[0].pid;
+    int start_time = gantt[0].time;
+
+    for (size_t i = 1; i < gantt.size(); ++i) {
+        if (gantt[i].pid != prev_pid) {
+            cout << start_time << "-" << gantt[i].time << "\tP";
+            if (prev_pid == -1) cout << "IDLE";
+            else cout << prev_pid;
+            cout << "\n";
+            prev_pid = gantt[i].pid;
+            start_time = gantt[i].time;
+        }
+    }
+
+    // Print the last segment
+    cout << start_time << "-" << gantt.back().time + 1 << "\tP";
+    if (prev_pid == -1) cout << "IDLE";
+    else cout << prev_pid;
+    cout << "\n";
+}
